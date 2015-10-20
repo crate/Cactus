@@ -171,6 +171,7 @@ class TestMarkdown(SiteTestCase):
             with open(os.path.join(self.site.page_path, "test.html"), "w") as f:
                 f.write("{% filter markdown %}" + levelStr + " Hello{% endfilter %}")
 
+            self.site.clear_page_cache()
             self.site.build()
 
             with open(os.path.join(self.site.build_path, "test.html")) as f:

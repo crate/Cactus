@@ -18,6 +18,7 @@ class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
     discarded = False
 
     def __init__(self, site, source_path):
+        self._render_cache = None
         self.site = site
 
         # The path where this element should be linked in "base" pages
@@ -91,7 +92,15 @@ class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
 
         return Context(context)
 
+    def clear_cache(self):
+        self._render_cache = None
+
     def render(self):
+        if not self._render_cache:
+            self._render_cache = self._render()
+        return self._render_cache
+
+    def _render(self):
         """
         Takes the template data with context and renders it to the final output file.
         """

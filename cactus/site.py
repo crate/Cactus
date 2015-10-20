@@ -45,7 +45,7 @@ class Site(SiteCompatibilityLayer):
     _path = None
     _parallel = PARALLEL_CONSERVATIVE  #TODO: Test me
     _static = None
-    _page_cache = []
+    _page_cache = {}
 
     def __init__(self, path, config_paths=None, ui=None,
         PluginManagerClass=None, ExternalManagerClass=None, DeploymentEngineClass=None):
@@ -60,6 +60,8 @@ class Site(SiteCompatibilityLayer):
         self.compress_extensions = self.config.get('compress', ['html', 'css', 'js', 'txt', 'xml'])
         self.fingerprint_extensions = self.config.get('fingerprint', [])
         self.locale = self.config.get("locale", None)
+
+        self.incremental = False
 
         # Verify our location looks correct
         self.path = path
@@ -232,15 +234,12 @@ class Site(SiteCompatibilityLayer):
         """
 
         logger.debug("*** BUILD %s", self.path)
-        start = datetime.now()
+        start = datetime.utcnow()
 
         self.verify_url()
 
         # Reset the static content
         self._static = None
-
-        # Reset page cache
-        self._page_cache = []
 
         #TODO: Facility to reset the site, and reload config.
         #TODO: Currently, we can't build a site instance multiple times
@@ -276,9 +275,12 @@ class Site(SiteCompatibilityLayer):
                 else:
                     os.remove(path)
 
+        render_start = datetime.utcnow()
         # Render the pages to their output files
         mapper = multiMap if self._parallel >= PARALLEL_AGGRESSIVE else map_apply
         mapper(lambda p: p.build(), self.pages())
+        duration = datetime.utcnow() - render_start
+        logger.info('Pages rendered in {:.2f} seconds.'.format(duration.total_seconds()))
 
         self.plugin_manager.postBuild(self)
 
@@ -286,7 +288,7 @@ class Site(SiteCompatibilityLayer):
             if os.path.isdir(static.pre_dir):
                 shutil.rmtree(static.pre_dir)
 
-        duration = datetime.now() - start
+        duration = datetime.utcnow() - start
         logger.info('Site built in {:.2f} seconds.'.format(duration.total_seconds()))
 
     def static(self):
@@ -347,17 +349,21 @@ class Site(SiteCompatibilityLayer):
         """
         List of pages.
         """
+        if not self._page_cache:
+            self._page_cache = self._pages()
+        return self._page_cache.values()
 
-        if self._page_cache:
-            return self._page_cache
-
+    def _pages(self):
+        cache = {}
         for path in fileList(self.page_path, relative=True):
             if path.endswith("~"):
                 continue
             logger.debug("Found page: %s", path)
-            self._page_cache.append(Page(self, path))
+            cache[path] = Page(self, path)
+        return cache
 
-        return self._page_cache
+    def clear_page_cache(self):
+        self._page_cache = {}
 
     def _rebuild_should_ignore(self, file_path):
 
@@ -382,6 +388,10 @@ class Site(SiteCompatibilityLayer):
 
         return True
 
+    def _strip_paths(self, paths):
+        """Strip page path from absolute paths"""
+        return (os.path.relpath(x, self.page_path) for x in paths)
+
     def _rebuild(self, changes):
 
         logger.debug("*** REBUILD %s", self.path)
@@ -401,6 +411,28 @@ class Site(SiteCompatibilityLayer):
             # They run on __init__ to run before fingerprinting, and the "built" static files themselves,
             # which are in a temporary folder, have been deleted already!
             # self._static = None
+
+            if self.incremental:
+                # 'incremental' builds only build files that changed.
+                # It does not check whether other files are effected by file
+                # that changed (e.g. blog overview).
+                # This is useful when you mostly edit single files (e.g. articles)
+                # because it increases site build speed immensely.
+                for changed in self._strip_paths(changes['deleted']):
+                    # file deleted, remove it from cache
+                    logger.debug('*** DELETED: {0}'.format(changed))
+                    del self._page_cache[changed]
+                for changed in self._strip_paths(changes['added']):
+                    # file added, add new page to cache
+                    logger.debug('*** ADDED: {0}'.format(changed))
+                    self._page_cache[changed] = Page(self, changed)
+                for changed in self._strip_paths(changes['changed']):
+                    # file changed, clear render cache
+                    logger.debug('*** CHANGED: {0}'.format(changed))
+                    self._page_cache[changed].clear_cache()
+            else:
+                self.clear_page_cache()
+
             self.build()
 
         except Exception as e:
@@ -429,12 +461,14 @@ class Site(SiteCompatibilityLayer):
 
         self.listener.resume()
 
-    def serve(self, browser=True, port=8000):
+    def serve(self, browser=True, port=8000, incremental=False):
         """
         Start a http server and rebuild on changes.
         """
         self._parallel = PARALLEL_DISABLED
         self._port = port
+        # re-build only changed files
+        self.incremental = incremental
 
         self.clean()
         self.build()
