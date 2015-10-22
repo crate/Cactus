@@ -114,7 +114,7 @@ def main(args):
 
     for subparser in config_parsers:
         subparser.add_argument('-c', '--config', action="append", help='Add a config file you want to use')
-        subparser.set_defaults(path=os.getcwd())
+        subparser.add_argument('--path', help='The path to the Cactus project', default=os.getcwd())
 
     for subparser in all_parsers:
         verbosity_group = subparser.add_mutually_exclusive_group()
