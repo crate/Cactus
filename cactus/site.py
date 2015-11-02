@@ -18,6 +18,7 @@ from cactus.plugin.builtin.ignore import IgnorePatternsPlugin
 from cactus.plugin.loader import CustomPluginsLoader, ObjectsPluginLoader
 from cactus.plugin.manager import PluginManager
 from cactus.static.external.manager import ExternalManager
+from cactus.compat import total_seconds
 from cactus.compat.paths import SiteCompatibilityLayer
 from cactus.compat.page import PageContextCompatibilityPlugin
 from cactus.utils.file import fileSize
@@ -280,7 +281,7 @@ class Site(SiteCompatibilityLayer):
         mapper = multiMap if self._parallel >= PARALLEL_AGGRESSIVE else map_apply
         mapper(lambda p: p.build(), self.pages())
         duration = datetime.utcnow() - render_start
-        logger.info('Pages rendered in {:.2f} seconds.'.format(duration.total_seconds()))
+        logger.info('Pages rendered in {0:.2f} seconds.'.format(total_seconds(duration)))
 
         self.plugin_manager.postBuild(self)
 
@@ -289,7 +290,7 @@ class Site(SiteCompatibilityLayer):
                 shutil.rmtree(static.pre_dir)
 
         duration = datetime.utcnow() - start
-        logger.info('Site built in {:.2f} seconds.'.format(duration.total_seconds()))
+        logger.info('Site built in {0:.2f} seconds.'.format(total_seconds(duration)))
 
     def static(self):
         """

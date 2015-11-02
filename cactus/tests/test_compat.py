@@ -25,13 +25,13 @@ class TestCompatibility(SiteTestCase):
             self._paths_key_exists(self.site, old_key)
 
     def test_page_paths_keys_exist(self):
-        page = self.site.pages()[0]
+        page = list(self.site.pages())[0]
 
         for old_key in ('full', 'full-build'):
             self._paths_key_exists(page, old_key)
 
     def test_page_path_attr(self):
-        page = self.site.pages()[0]
+        page = list(self.site.pages())[0]
         self.assertEqual(page.source_path, page.path)
 
     def test_page_paths_keys_exist_in_static(self):
