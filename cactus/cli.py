@@ -73,10 +73,9 @@ class CactusCli(object):
         site.domain_list()
 
 
-def main(args):
-    cli = CactusCli()
+def parse_arguments(cli, args):
+    """Parse command line arguments"""
 
-    # CLI parsing
     parser = argparse.ArgumentParser(description="Build and deploy static websites using Django templates.")
 
     subparsers = parser.add_subparsers(title='subcommands', description='Valid subcommands',
@@ -114,7 +113,7 @@ def main(args):
 
     for subparser in config_parsers:
         subparser.add_argument('-c', '--config', action="append", help='Add a config file you want to use')
-        subparser.add_argument('--path', help='The path to the Cactus project', default=os.getcwd())
+        subparser.add_argument('-d', '--path', help='The path to the Cactus project', default=os.getcwd())
 
     for subparser in all_parsers:
         verbosity_group = subparser.add_mutually_exclusive_group()
@@ -127,7 +126,16 @@ def main(args):
     # Small hack to provide a default value while not replacing what's
     # given by the user, if there is
     if hasattr(ns, 'config') and ns.config is None:  # We don't need config for create
-        ns.config = ["config.json"]
+        ns.config = [os.path.join(ns.path, 'config.json')]
+
+    return ns
+
+
+def main(args):
+    cli = CactusCli()
+
+    # CLI parsing
+    ns = parse_arguments(cli, args)
 
     # Colors!
     colorama.init()
