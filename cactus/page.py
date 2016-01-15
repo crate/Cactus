@@ -1,6 +1,8 @@
 import os
 import io
 import logging
+import shutil
+import mimetypes
 
 from six.moves import urllib
 
@@ -9,23 +11,88 @@ from cactus.compat.paths import PageCompatibilityLayer
 from cactus.utils.url import ResourceURLHelperMixin
 from cactus.utils.helpers import memoize
 
-
 logger = logging.getLogger(__name__)
 
 
-class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
-
-    discarded = False
+class WebContent(PageCompatibilityLayer, ResourceURLHelperMixin):
 
     def __init__(self, site, source_path):
-        self._render_cache = None
         self.site = site
-
-        # The path where this element should be linked in "base" pages
         self.source_path = source_path
-
         # The URL where this element should be linked in "base" pages
         self.link_url = '/{0}'.format(self.source_path)
+
+    def __repr__(self):
+        return '<{0}: {1}>'.format(self.__class__.__name__, self.source_path)
+
+    @staticmethod
+    def fromPath(path, site):
+        mime, encoding = mimetypes.guess_type(path)
+        if mime and mime.startswith('image'):
+            logger.warning("Image in /pages directory found: %s", path)
+            return PageImage(site, path)
+        return Page(site, path)
+
+    def is_html(self):
+        return self._path.endswith('.html')
+
+    def is_index(self):
+        return self._path.endswith('index.html')
+
+    @property
+    def _path(self):
+        return urllib.parse.urlparse(self.source_path).path
+
+    @property
+    def absolute_final_url(self):
+        """
+        Return the absolute URL for this page in the final build
+        """
+        return urllib.parse.urljoin(self.site.url, self.final_url)
+
+    @property
+    def full_source_path(self):
+        return os.path.join(self.site.path, 'pages', self.source_path)
+
+    @property
+    def full_build_path(self):
+        return os.path.join(self.site.build_path, self.build_path)
+
+    def build(self):
+        """
+        The build method needs to be implemented by the subclass of WebContent
+        """
+        raise NotImplementedError('build() must be implemented by subclass')
+
+
+class PageImage(WebContent):
+
+    def __init__(self, site, source_path):
+        super(PageImage, self).__init__(site, source_path)
+        self.final_url = self.link_url
+        self.build_path = self.source_path
+
+    def is_html(self):
+        return False
+
+    def build(self):
+        """
+        Copy the page image to the output folder.
+        """
+        try:
+            os.makedirs(os.path.dirname(self.full_build_path))
+        except OSError:
+            pass
+
+        shutil.copy(self.full_source_path, self.full_build_path)
+
+
+class Page(WebContent):
+
+    def __init__(self, site, source_path):
+        super(Page, self).__init__(site, source_path)
+        self._render_cache = None
+        self.discarded = False
 
         if self.site.prettify_urls:
             # The URL where this element should be linked in "built" pages
@@ -45,27 +112,6 @@ class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
         else:
             self.final_url = self.link_url
             self.build_path = self.source_path
-
-    def is_html(self):
-        return urllib.parse.urlparse(self.source_path).path.endswith('.html')
-
-    def is_index(self):
-        return urllib.parse.urlparse(self.source_path).path.endswith('index.html')
-
-    @property
-    def absolute_final_url(self):
-        """
-        Return the absolute URL for this page in the final build
-        """
-        return urllib.parse.urljoin(self.site.url, self.final_url)
-
-    @property
-    def full_source_path(self):
-        return os.path.join(self.site.path, 'pages', self.source_path)
-
-    @property
-    def full_build_path(self):
-        return os.path.join(self.site.build_path, self.build_path)
 
     def data(self):
         with io.FileIO(self.full_source_path, 'r') as f:
@@ -121,8 +167,10 @@ class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
         """
         Save the rendered output to the output file.
         """
-        logger.debug('Building {0} --> {1}'.format(self.source_path, self.final_url))  #TODO: Fix inconsistency w/ static
-        data = self.render()  #TODO: This calls preBuild indirectly. Not great.
+        # TODO: Fix inconsistency w/ static
+        logger.debug('Building {0} --> {1}'.format(self.source_path, self.final_url))
+        # TODO: This calls preBuild indirectly. Not great.
+        data = self.render()
 
         if not self.discarded:
 
@@ -168,6 +216,3 @@ class Page(PageCompatibilityLayer, ResourceURLHelperMixin):
                 break
 
         return values, '\n'.join(lines[i:])
-
-    def __repr__(self):
-        return '<Page: {0}>'.format(self.source_path)

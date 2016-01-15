@@ -27,10 +27,9 @@ from cactus.utils.helpers import memoize, map_apply
 from cactus.utils.network import internetWorking
 from cactus.utils.parallel import multiMap, PARALLEL_DISABLED, PARALLEL_CONSERVATIVE, PARALLEL_AGGRESSIVE
 from cactus.utils.url import is_external
-from cactus.page import Page
+from cactus.page import WebContent
 from cactus.static import Static
 from cactus.listener import Listener
-# from cactus.server import Server, RequestHandler
 from cactus.server import WebServer
 from cactus.browser import browserReload, browserReloadCSS
 from cactus.utils import ipc
@@ -265,7 +264,6 @@ class Site(SiteCompatibilityLayer):
         self.buildStatic()
 
         # Always clean out the pages
-
         build_static_path = os.path.join(self.build_path, "static")
 
         for path in os.listdir(self.build_path):
@@ -359,8 +357,8 @@ class Site(SiteCompatibilityLayer):
         for path in fileList(self.page_path, relative=True):
             if path.endswith("~"):
                 continue
-            logger.debug("Found page: %s", path)
-            cache[path] = Page(self, path)
+            logger.debug("Found content: %s", path)
+            cache[path] = WebContent.fromPath(path, self)
         return cache
 
     def clear_page_cache(self):
@@ -426,7 +424,7 @@ class Site(SiteCompatibilityLayer):
                 for changed in self._strip_paths(changes['added']):
                     # file added, add new page to cache
                     logger.debug('*** ADDED: {0}'.format(changed))
-                    self._page_cache[changed] = Page(self, changed)
+                    self._page_cache[changed] = WebContent.fromPath(changed, self)
                 for changed in self._strip_paths(changes['changed']):
                     # file changed, clear render cache
                     logger.debug('*** CHANGED: {0}'.format(changed))

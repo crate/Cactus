@@ -4,6 +4,7 @@ import logging
 import tempfile
 
 from cactus.tests import SiteTestCase
+from cactus.page import Page, PageImage
 
 
 class TestBuild(SiteTestCase):
@@ -41,10 +42,23 @@ class TestBuild(SiteTestCase):
 
     def test_pages_binary_file(self):
 
-        with open(os.path.join(self.site.page_path, 'file.zip'), "wb") as f:
+        fn = 'file.zip'
+        with open(os.path.join(self.site.page_path, fn), "wb") as f:
             f.write(os.urandom(1024))
 
         self.site.build()
+        self.assertFalse(self.site._page_cache[fn].is_html())
+        self.assertTrue(isinstance(self.site._page_cache[fn], Page))
+
+    def test_pages_image_file(self):
+
+        fn = 'file.jpg'
+        with open(os.path.join(self.site.page_path, fn), "wb") as f:
+            f.write(os.urandom(1024))
+
+        self.site.build()
+        self.assertFalse(self.site._page_cache[fn].is_html())
+        self.assertTrue(isinstance(self.site._page_cache[fn], PageImage))
 
     def test_listener_ignores(self):
 
