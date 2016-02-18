@@ -1,9 +1,7 @@
-import os
-import sys
 import logging
-import threading
 import mimetypes
 import itertools
+import requests
 
 import tornado.httpserver
 import tornado.websocket
@@ -15,6 +13,7 @@ logger = logging.getLogger(__name__)
 from cactus import mime
 
 TEMPLATES = {}
+
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
@@ -28,6 +27,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
     def on_message(self, msg):
         pass
+
 
 class StaticHandler(tornado.web.StaticFileHandler):
 
@@ -72,11 +72,20 @@ class StaticHandler(tornado.web.StaticFileHandler):
     def log_request(self, handler):
         pass
 
+
 class StaticSingleFileHandler(tornado.web.RequestHandler):
 
     def get(self):
         self.set_header("Content-Type", mime.guess("file.js"))
         self.finish(TEMPLATES["js"])
+
+
+class BenchmarkApiProxy(tornado.web.RequestHandler):
+
+    def get(self, uri):
+        res = requests.get('http://bench-upstream.srv1.azure.fir.io/result/{0}'.format(uri))
+        self.write(res.content)
+
 
 class WebServer(object):
 
@@ -88,6 +97,7 @@ class WebServer(object):
         self.application = tornado.web.Application([
             (r'/_cactus/ws', WebSocketHandler),
             (r'/_cactus/cactus.js', StaticSingleFileHandler),
+            (r'/api/(.*)', BenchmarkApiProxy),
             (r'/(.*)', StaticHandler, {'path': self.path, "default_filename": "index.html"}),
             ], template_path=self.path)
 
@@ -106,7 +116,6 @@ class WebServer(object):
             log_method = logging.error
 
         log_method("%d %s %s", handler.get_status(), handler.request.method, handler.request.uri)
-
 
     def start(self):
 
